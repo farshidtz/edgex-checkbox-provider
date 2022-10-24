@@ -5,8 +5,7 @@
 # 1. when enable/disable Kuiper and ensures that both 
 # Kuiper and app-service-configurable are started/stopped;
 # 2. ensure Kuiper can create a stream from edgex source;
-# 3. ensure Kuiper can create a type of rule with log sink, 
-# or a type of rule with MQTT sink;
+# 3. ensure Kuiper can create a type of rule with log sink;
 # 4. validate the operation of stream and rule (status, stop, delete).
 
 # get the directory of this script
@@ -112,38 +111,6 @@ else
     echo "create rule_log sucessfully"
 fi
 
-# if mqtt broker not exit, then install it
-if [ -z "$(lsof -i -P -n -S 2 | grep 1883)" ]; then
-    snap install mosquitto
-    mqtt_broker_is_installed=true
-    echo "mosquitto installed"
-fi
-
-# create rule_mqtt
-create_rule_mqtt=$(edgexfoundry.kuiper-cli create rule rule_mqtt '
-{
-   "sql":"SELECT * from stream1",
-   "actions":[
-      {
-         "mqtt":{
-            "clientId": "stream1",
-            "protocolVersion": "3.1",
-            "server": "tcp://localhost:1883",
-            "topic": "sink-result"
-         }
-      }
-   ]
-}' | grep '\bRule rule_mqtt was created successfully\b')
-
-if [ -z "$create_rule_mqtt" ] ; then
-    >&2 echo $create_rule_mqtt 
-    echo "cannot create kuiper rule_mqtt"
-    print_error_logs
-    snap_remove
-    exit 1
-else
-    echo "create rule_mqtt) sucessfully"
-fi
 
 # create rule_edgex_message_bus
 create_rule_edgex_message_bus=$(edgexfoundry.kuiper-cli create rule rule_edgex_message_bus '
@@ -182,16 +149,6 @@ else
     echo "run rule_log sucessfully"
 fi
 
-# get rule's status to check if rule_mqtt works
-if [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_mqtt | grep '\bStopped: canceled manually or by error\b')" ] ; then
-    >&2 echo $(edgexfoundry.kuiper-cli getstatus rule rule_mqtt)
-    echo "cannot run rule_mqtt"
-    print_error_logs
-    snap_remove
-    exit 1
-else
-    echo "run rule_mqtt sucessfully"
-fi
 
 i=0
 while [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus| grep '"source_stream1_0_records_in_total": 0')" ] ; 
@@ -222,31 +179,25 @@ else
 fi
 
 # stop a rule
-if [ -z "$(edgexfoundry.kuiper-cli stop rule rule_log | grep '\bRule rule_log was stopped\b')" ] || 
-   [ -z "$(edgexfoundry.kuiper-cli stop rule rule_mqtt | grep '\bRule rule_mqtt was stopped\b')" ] ; then
+if [ -z "$(edgexfoundry.kuiper-cli stop rule rule_log | grep '\bRule rule_log was stopped\b')" ] ; then
     >&2 echo $(edgexfoundry.kuiper-cli stop rule rule_log)
-    >&2 echo $(edgexfoundry.kuiper-cli stop rule rule_mqtt)
     echo "cannot stop rule"
     print_error_logs
     snap_remove
     exit 1
 else
     echo "stop rule_log sucessfully"
-    echo "stop rule_mqtt sucessfully"
 fi
 
 # drop a rule
-if [ -z "$(edgexfoundry.kuiper-cli drop rule rule_log | grep '\bRule rule_log is dropped\b')" ] || 
-   [ -z "$(edgexfoundry.kuiper-cli drop rule rule_mqtt | grep '\bRule rule_mqtt is dropped\b')" ] ; then
+if [ -z "$(edgexfoundry.kuiper-cli drop rule rule_log | grep '\bRule rule_log is dropped\b')" ] ; then
     >&2 echo $(edgexfoundry.kuiper-cli drop rule rule_log)
-    >&2 echo $(edgexfoundry.kuiper-cli drop rule rule_mqtt)
     echo "cannot drop rule"
     print_error_logs
     snap_remove
     exit 1
 else
     echo "drop rule_log sucessfully"
-    echo "drop rule_mqtt sucessfully"
 fi
 
 # drop a stream
@@ -284,9 +235,4 @@ fi
 snap remove edgex-device-virtual
 snap_remove
 
-# remove the MQTT broker if we installed it
-if [ "$mqtt_broker_is_installed" = true ] ; then
-    snap remove --purge mosquitto
-    echo "mosquitto removed"
-fi
 
