@@ -18,7 +18,14 @@ source "$SCRIPT_DIR/utils.sh"
 
 START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
-snap_remove
+snap_remove_all()
+{
+    snap_remove
+    snap remove edgex-device-virtual
+}
+
+snap_remove_all
+
 
 # install the snap to make sure it installs
 if [ -n "$REVISION_TO_TEST" ]; then
@@ -34,6 +41,8 @@ snap_wait_all_services_online
 # TODO: change channel to latest/stable when available
 snap remove edgex-device-virtual
 snap install edgex-device-virtual --channel=latest/edge
+# manually connect just in case edgexfoundry is a local build
+snap connect edgexfoundry:edgex-secretstore-token edgex-device-virtual:edgex-secretstore-token
 snap start edgex-device-virtual
 
 i=0
@@ -42,13 +51,13 @@ reading_count=0
 while [ "$reading_count" -eq 0 ] ; 
 do
     ((i=i+1))
-    echo "waiting for edgex-device-virtual produce readings, current retry count: $i/60"
+    echo "waiting for edgex-device-virtual to produce readings, current retry count: $i/60"
     sleep 1
     #max retry avoids forever waiting
     if [ "$i" -ge 60 ]; then
-        echo "waiting for edgex-device-virtual produce readings, reached maximum retry count of 60"
+        echo "waiting for edgex-device-virtual to produce readings, reached maximum retry count of 60"
         print_error_logs
-        snap_remove
+        snap_remove_all
         exit 1
     fi
     reading_count=$(curl -s -X 'GET'   'http://localhost:59880/api/v2/reading/count' | jq -r '.Count')
@@ -66,7 +75,7 @@ snap_wait_port_status 59720 open
 if [ -n "$(snap services edgexfoundry.kuiper | grep edgexfoundry.kuiper | grep inactive)" ] ; then
     echo "kuiper is not running"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 fi
 
@@ -74,7 +83,7 @@ fi
 if [ -n "$(snap services edgexfoundry.app-service-configurable | grep edgexfoundry.app-service-configurable | grep inactive)" ] ; then
     echo "app-service-configurable is not running"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 fi
 
@@ -82,7 +91,7 @@ fi
 if [ -z "$(edgexfoundry.kuiper-cli create stream stream1 '()WITH(FORMAT="JSON",TYPE="edgex")' | grep '\bStream stream1 is created\b')" ] ; then
     echo "cannot create kuiper stream"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "create kuiper stream successfully"
@@ -105,7 +114,7 @@ if [ -z "$create_rule_log" ] ; then
     >&2 echo $create_rule_log 
     echo "cannot create kuiper rule_log)"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "create rule_log sucessfully"
@@ -132,7 +141,7 @@ if [ -z "$create_rule_edgex_message_bus" ] ; then
     >&2 echo $create_rule_edgex_message_bus    
     echo "cannot create kuiper rule_edgex_message_bus)"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "create rule_edgex_message_bus) sucessfully"
@@ -143,7 +152,7 @@ if [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_log | grep '\bStopped: ca
     >&2 echo $(edgexfoundry.kuiper-cli getstatus rule rule_log)
     echo "cannot run rule_log"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "run rule_log sucessfully"
@@ -154,17 +163,17 @@ i=0
 while [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus| grep '"source_stream1_0_records_in_total": 0')" ] ; 
 do
     ((i=i+1))
-    echo "waiting for readings come into stream, current retry count: $i/60"
+    echo "waiting for readings to come into stream, current retry count: $i/60"
     sleep 1
     #max retry avoids forever waiting
     if [ "$i" -ge 60 ]; then
-        echo "waiting for readings come into stream reached maximum retry count of 60"
+        echo "waiting for readings to come into stream reached maximum retry count of 60"
         print_error_logs
-        snap_remove
+        snap_remove_all
         exit 1
     fi
 done
-echo "readings come into stream now"
+echo "readings are in the stream"
 
 if [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus| grep '\bStopped: canceled manually or by error\b')" ] ||
    [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus| grep '"sink_edgex_0_0_records_out_total": 0')" ] ; then
@@ -172,7 +181,7 @@ if [ -n "$(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus| grep '
     >&2 echo $(edgexfoundry.kuiper-cli getstatus rule rule_edgex_message_bus)
     echo "cannot run rule_edgex_message_bus"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "run rule_edgex_message_bus sucessfully"
@@ -183,7 +192,7 @@ if [ -z "$(edgexfoundry.kuiper-cli stop rule rule_log | grep '\bRule rule_log wa
     >&2 echo $(edgexfoundry.kuiper-cli stop rule rule_log)
     echo "cannot stop rule"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "stop rule_log sucessfully"
@@ -194,7 +203,7 @@ if [ -z "$(edgexfoundry.kuiper-cli drop rule rule_log | grep '\bRule rule_log is
     >&2 echo $(edgexfoundry.kuiper-cli drop rule rule_log)
     echo "cannot drop rule"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "drop rule_log sucessfully"
@@ -205,7 +214,7 @@ if [ -z "$(edgexfoundry.kuiper-cli drop stream stream1 | grep '\bStream stream1 
     >&2 echo $(edgexfoundry.kuiper-cli drop stream stream1)
     echo "cannot drop stream"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 else
     echo "drop stream sucessfully"
@@ -219,7 +228,7 @@ snap_wait_port_status 59720 close
 if [ -z "$(snap services edgexfoundry.kuiper | grep edgexfoundry.kuiper | grep inactive)" ]; then
     echo "kuiper failed to stop app-service-configurable"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 fi
 
@@ -227,12 +236,11 @@ fi
 if [ -z "$(snap services edgexfoundry.app-service-configurable | grep edgexfoundry.app-service-configurable | grep inactive)" ]; then
     echo "kuiper failed to stop app-service-configurable"
     print_error_logs
-    snap_remove
+    snap_remove_all
     exit 1
 fi
 
 # remove the snap to run the next test
-snap remove edgex-device-virtual
-snap_remove
+snap_remove_all
 
 
