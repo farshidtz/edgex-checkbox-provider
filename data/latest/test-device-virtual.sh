@@ -24,7 +24,7 @@ snap_wait_all_services_online
 
 # install and start edgex-device-virtual
 snap remove edgex-device-virtual
-snap install edgex-device-virtual --channel=latest/edge
+snap install edgex-device-virtual --channel=$DEFAULT_TEST_CHANNEL
 snap start edgex-device-virtual
 
 # wait for service to come online
