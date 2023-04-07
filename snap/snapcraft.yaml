@@ -66,3 +66,5 @@ parts:
     source: launchers/
     organize:
       '*': bin/
+    stage-packages:
+      - curl
